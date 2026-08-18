@@ -4,102 +4,44 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vrynt Dialer</title>
-  <script src="https://sdk.twilio.com/js/client/releases/1.14.0/twilio.min.js"></script>
+  <script src="https://sdk.twilio.com/js/voice/releases/2.11.3/twilio.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0f172a;
-      color: #f8fafc;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
+      background: #0f172a; color: #f8fafc; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
     }
     .dialer {
-      background: #1e293b;
-      border-radius: 20px;
-      padding: 30px;
-      width: 100%;
-      max-width: 360px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+      background: #1e293b; border-radius: 20px; padding: 30px;
+      width: 100%; max-width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);
     }
-    h1 {
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 4px;
-      text-align: center;
-    }
-    .status {
-      text-align: center;
-      font-size: 13px;
-      color: #94a3b8;
-      margin-bottom: 20px;
-      min-height: 18px;
-    }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; text-align: center; }
+    .status { text-align: center; font-size: 13px; color: #94a3b8; margin-bottom: 20px; min-height: 18px; }
     .status.connected { color: #22c55e; }
     .status.calling { color: #f59e0b; }
     .status.error { color: #ef4444; }
     .display {
-      background: #0f172a;
-      border-radius: 12px;
-      padding: 20px;
-      font-size: 24px;
-      font-family: "SF Mono", Monaco, monospace;
-      text-align: center;
-      margin-bottom: 20px;
-      min-height: 64px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      letter-spacing: 1px;
-      word-break: break-all;
+      background: #0f172a; border-radius: 12px; padding: 20px;
+      font-size: 24px; font-family: "SF Mono", Monaco, monospace;
+      text-align: center; margin-bottom: 20px; min-height: 64px;
+      display: flex; align-items: center; justify-content: center;
+      letter-spacing: 1px; word-break: break-all;
     }
     .display.empty { color: #475569; }
-    .keypad {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-bottom: 20px;
-    }
+    .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
     .key {
-      background: #334155;
-      border: none;
-      color: #f8fafc;
-      font-size: 22px;
-      font-weight: 500;
-      padding: 18px;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: all 0.1s;
-      font-family: inherit;
+      background: #334155; border: none; color: #f8fafc; font-size: 22px;
+      font-weight: 500; padding: 18px; border-radius: 12px; cursor: pointer;
+      transition: all 0.1s; font-family: inherit;
     }
     .key:hover { background: #475569; }
     .key:active { background: #64748b; transform: scale(0.95); }
-    .key .sub {
-      display: block;
-      font-size: 10px;
-      color: #94a3b8;
-      margin-top: 2px;
-      letter-spacing: 2px;
-    }
-    .actions {
-      display: grid;
-      grid-template-columns: 1fr 2fr 1fr;
-      gap: 10px;
-      align-items: center;
-    }
+    .key .sub { display: block; font-size: 10px; color: #94a3b8; margin-top: 2px; letter-spacing: 2px; }
+    .actions { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 10px; align-items: center; }
     .btn {
-      border: none;
-      color: white;
-      padding: 16px;
-      border-radius: 12px;
-      cursor: pointer;
-      font-size: 16px;
-      font-weight: 600;
-      font-family: inherit;
-      transition: all 0.1s;
+      border: none; color: white; padding: 16px; border-radius: 12px;
+      cursor: pointer; font-size: 16px; font-weight: 600; font-family: inherit; transition: all 0.1s;
     }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .call { background: #22c55e; font-size: 20px; }
@@ -110,12 +52,7 @@
     .del:hover:not(:disabled) { background: #64748b; }
     .clear { background: transparent; color: #94a3b8; font-size: 12px; }
     .clear:hover { color: #f8fafc; }
-    .footer {
-      text-align: center;
-      margin-top: 16px;
-      font-size: 11px;
-      color: #475569;
-    }
+    .footer { text-align: center; margin-top: 16px; font-size: 11px; color: #475569; }
   </style>
 </head>
 <body>
@@ -156,7 +93,8 @@
 
     let number = '';
     let device = null;
-    let activeConnection = null;
+    let activeCall = null;
+    let deviceReady = false;
     let holdTimer = null;
 
     function setStatus(text, cls = '') {
@@ -168,7 +106,7 @@
       if (number) {
         displayEl.textContent = number;
         displayEl.classList.remove('empty');
-        callBtn.disabled = !device || device.status() !== 'ready';
+        callBtn.disabled = !deviceReady;
       } else {
         displayEl.textContent = 'Enter number';
         displayEl.classList.add('empty');
@@ -176,10 +114,8 @@
       }
     }
 
-    // Keypad handlers
     document.querySelectorAll('.key').forEach(btn => {
       const digit = btn.dataset.digit;
-      // Hold-to-plus for the 0 key
       if (digit === '0') {
         btn.addEventListener('mousedown', () => {
           holdTimer = setTimeout(() => { number += '+'; render(); holdTimer = null; }, 500);
@@ -194,7 +130,7 @@
         btn.addEventListener('click', () => {
           number += digit;
           render();
-          if (activeConnection) activeConnection.sendDigits(digit);
+          if (activeCall) activeCall.sendDigits(digit);
         });
       }
     });
@@ -202,12 +138,11 @@
     delBtn.addEventListener('click', () => { number = number.slice(0, -1); render(); });
     clearBtn.addEventListener('click', () => { number = ''; render(); });
 
-    // Keyboard support
     document.addEventListener('keydown', (e) => {
       if (/^[0-9*#+]$/.test(e.key)) {
         number += e.key;
         render();
-        if (activeConnection) activeConnection.sendDigits(e.key === '+' ? '+' : e.key);
+        if (activeCall && e.key !== '+') activeCall.sendDigits(e.key);
       } else if (e.key === 'Backspace') {
         number = number.slice(0, -1);
         render();
@@ -217,38 +152,77 @@
     });
 
     callBtn.addEventListener('click', makeCall);
-    hangupBtn.addEventListener('click', () => { if (activeConnection) activeConnection.disconnect(); });
+    hangupBtn.addEventListener('click', () => { if (activeCall) activeCall.disconnect(); });
 
-    function makeCall() {
+    async function makeCall() {
       if (!device || !number) return;
-      setStatus('Calling ' + number + '...', 'calling');
-      callBtn.style.display = 'none';
-      hangupBtn.style.display = 'block';
-      activeConnection = device.connect({ To: number });
+      try {
+        setStatus('Calling ' + number + '...', 'calling');
+        callBtn.style.display = 'none';
+        hangupBtn.style.display = 'block';
+        activeCall = await device.connect({ params: { To: number } });
+
+        activeCall.on('accept', () => setStatus('In call', 'connected'));
+        activeCall.on('disconnect', () => {
+          setStatus('Ready', 'connected');
+          activeCall = null;
+          callBtn.style.display = 'block';
+          hangupBtn.style.display = 'none';
+        });
+        activeCall.on('cancel', () => {
+          setStatus('Call cancelled', '');
+          activeCall = null;
+          callBtn.style.display = 'block';
+          hangupBtn.style.display = 'none';
+        });
+        activeCall.on('error', (err) => {
+          setStatus('Call error: ' + err.message, 'error');
+          activeCall = null;
+          callBtn.style.display = 'block';
+          hangupBtn.style.display = 'none';
+        });
+      } catch (err) {
+        setStatus('Failed: ' + err.message, 'error');
+        callBtn.style.display = 'block';
+        hangupBtn.style.display = 'none';
+      }
     }
 
-    // Fetch access token and set up the Twilio Device
     async function init() {
       try {
         const res = await fetch('/api/token');
         if (!res.ok) throw new Error('Token request failed: ' + res.status);
         const data = await res.json();
+        if (data.error) throw new Error(data.error);
 
         device = new Twilio.Device(data.token, {
           codecPreferences: ['opus', 'pcmu'],
-          fakeLocalDTMF: true,
-          enableRingingState: true,
+          logLevel: 'warn',
         });
 
-        device.on('ready', () => { setStatus('Ready', 'connected'); render(); });
-        device.on('error', (err) => { setStatus('Error: ' + err.message, 'error'); });
-        device.on('connect', () => { setStatus('In call', 'connected'); });
-        device.on('disconnect', () => {
+        device.on('registered', () => {
+          deviceReady = true;
           setStatus('Ready', 'connected');
-          activeConnection = null;
-          callBtn.style.display = 'block';
-          hangupBtn.style.display = 'none';
+          render();
         });
+        device.on('error', (err) => {
+          setStatus('Device error: ' + err.message, 'error');
+        });
+        device.on('unregistered', () => {
+          deviceReady = false;
+          setStatus('Disconnected', '');
+        });
+        device.on('tokenWillExpire', async () => {
+          try {
+            const r = await fetch('/api/token');
+            const d = await r.json();
+            device.updateToken(d.token);
+          } catch (e) {
+            setStatus('Token refresh failed', 'error');
+          }
+        });
+
+        await device.register();
       } catch (err) {
         setStatus('Setup failed: ' + err.message, 'error');
       }
