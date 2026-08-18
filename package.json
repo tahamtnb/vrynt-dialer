@@ -1,0 +1,9 @@
+{
+  "name": "vrynt-dialer",
+  "version": "1.0.0",
+  "description": "Custom browser dialer for Vrynt Lab, powered by Twilio.",
+  "private": true,
+  "dependencies": {
+    "twilio": "^4.23.0"
+  }
+}

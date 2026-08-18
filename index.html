@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vrynt Dialer</title>
+  <script src="https://sdk.twilio.com/js/client/releases/1.14.0/twilio.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .dialer {
+      background: #1e293b;
+      border-radius: 20px;
+      padding: 30px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+    .status {
+      text-align: center;
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 20px;
+      min-height: 18px;
+    }
+    .status.connected { color: #22c55e; }
+    .status.calling { color: #f59e0b; }
+    .status.error { color: #ef4444; }
+    .display {
+      background: #0f172a;
+      border-radius: 12px;
+      padding: 20px;
+      font-size: 24px;
+      font-family: "SF Mono", Monaco, monospace;
+      text-align: center;
+      margin-bottom: 20px;
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: 1px;
+      word-break: break-all;
+    }
+    .display.empty { color: #475569; }
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .key {
+      background: #334155;
+      border: none;
+      color: #f8fafc;
+      font-size: 22px;
+      font-weight: 500;
+      padding: 18px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.1s;
+      font-family: inherit;
+    }
+    .key:hover { background: #475569; }
+    .key:active { background: #64748b; transform: scale(0.95); }
+    .key .sub {
+      display: block;
+      font-size: 10px;
+      color: #94a3b8;
+      margin-top: 2px;
+      letter-spacing: 2px;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 2fr 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+    .btn {
+      border: none;
+      color: white;
+      padding: 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: inherit;
+      transition: all 0.1s;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .call { background: #22c55e; font-size: 20px; }
+    .call:hover:not(:disabled) { background: #16a34a; }
+    .hangup { background: #ef4444; font-size: 20px; }
+    .hangup:hover:not(:disabled) { background: #dc2626; }
+    .del { background: #475569; }
+    .del:hover:not(:disabled) { background: #64748b; }
+    .clear { background: transparent; color: #94a3b8; font-size: 12px; }
+    .clear:hover { color: #f8fafc; }
+    .footer {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 11px;
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+  <div class="dialer">
+    <h1>Vrynt Dialer</h1>
+    <div id="status" class="status">Initializing...</div>
+    <div id="display" class="display empty">Enter number</div>
+    <div class="keypad">
+      <button class="key" data-digit="1">1<span class="sub">&nbsp;</span></button>
+      <button class="key" data-digit="2">2<span class="sub">ABC</span></button>
+      <button class="key" data-digit="3">3<span class="sub">DEF</span></button>
+      <button class="key" data-digit="4">4<span class="sub">GHI</span></button>
+      <button class="key" data-digit="5">5<span class="sub">JKL</span></button>
+      <button class="key" data-digit="6">6<span class="sub">MNO</span></button>
+      <button class="key" data-digit="7">7<span class="sub">PQRS</span></button>
+      <button class="key" data-digit="8">8<span class="sub">TUV</span></button>
+      <button class="key" data-digit="9">9<span class="sub">WXYZ</span></button>
+      <button class="key" data-digit="*">*<span class="sub">&nbsp;</span></button>
+      <button class="key" data-digit="0">0<span class="sub">+</span></button>
+      <button class="key" data-digit="#">#<span class="sub">&nbsp;</span></button>
+    </div>
+    <div class="actions">
+      <button id="del" class="btn del">⌫</button>
+      <button id="call" class="btn call" disabled>Call</button>
+      <button id="hangup" class="btn hangup" style="display:none;">End</button>
+      <button id="clear" class="btn clear">Clear</button>
+    </div>
+    <div class="footer">Tip: hold 0 for +</div>
+  </div>
+
+  <script>
+    const displayEl = document.getElementById('display');
+    const statusEl = document.getElementById('status');
+    const callBtn = document.getElementById('call');
+    const hangupBtn = document.getElementById('hangup');
+    const delBtn = document.getElementById('del');
+    const clearBtn = document.getElementById('clear');
+
+    let number = '';
+    let device = null;
+    let activeConnection = null;
+    let holdTimer = null;
+
+    function setStatus(text, cls = '') {
+      statusEl.textContent = text;
+      statusEl.className = 'status ' + cls;
+    }
+
+    function render() {
+      if (number) {
+        displayEl.textContent = number;
+        displayEl.classList.remove('empty');
+        callBtn.disabled = !device || device.status() !== 'ready';
+      } else {
+        displayEl.textContent = 'Enter number';
+        displayEl.classList.add('empty');
+        callBtn.disabled = true;
+      }
+    }
+
+    // Keypad handlers
+    document.querySelectorAll('.key').forEach(btn => {
+      const digit = btn.dataset.digit;
+      // Hold-to-plus for the 0 key
+      if (digit === '0') {
+        btn.addEventListener('mousedown', () => {
+          holdTimer = setTimeout(() => { number += '+'; render(); holdTimer = null; }, 500);
+        });
+        btn.addEventListener('mouseup', () => {
+          if (holdTimer) { clearTimeout(holdTimer); number += '0'; render(); }
+        });
+        btn.addEventListener('mouseleave', () => {
+          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+        });
+      } else {
+        btn.addEventListener('click', () => {
+          number += digit;
+          render();
+          if (activeConnection) activeConnection.sendDigits(digit);
+        });
+      }
+    });
+
+    delBtn.addEventListener('click', () => { number = number.slice(0, -1); render(); });
+    clearBtn.addEventListener('click', () => { number = ''; render(); });
+
+    // Keyboard support
+    document.addEventListener('keydown', (e) => {
+      if (/^[0-9*#+]$/.test(e.key)) {
+        number += e.key;
+        render();
+        if (activeConnection) activeConnection.sendDigits(e.key === '+' ? '+' : e.key);
+      } else if (e.key === 'Backspace') {
+        number = number.slice(0, -1);
+        render();
+      } else if (e.key === 'Enter' && !callBtn.disabled) {
+        makeCall();
+      }
+    });
+
+    callBtn.addEventListener('click', makeCall);
+    hangupBtn.addEventListener('click', () => { if (activeConnection) activeConnection.disconnect(); });
+
+    function makeCall() {
+      if (!device || !number) return;
+      setStatus('Calling ' + number + '...', 'calling');
+      callBtn.style.display = 'none';
+      hangupBtn.style.display = 'block';
+      activeConnection = device.connect({ To: number });
+    }
+
+    // Fetch access token and set up the Twilio Device
+    async function init() {
+      try {
+        const res = await fetch('/api/token');
+        if (!res.ok) throw new Error('Token request failed: ' + res.status);
+        const data = await res.json();
+
+        device = new Twilio.Device(data.token, {
+          codecPreferences: ['opus', 'pcmu'],
+          fakeLocalDTMF: true,
+          enableRingingState: true,
+        });
+
+        device.on('ready', () => { setStatus('Ready', 'connected'); render(); });
+        device.on('error', (err) => { setStatus('Error: ' + err.message, 'error'); });
+        device.on('connect', () => { setStatus('In call', 'connected'); });
+        device.on('disconnect', () => {
+          setStatus('Ready', 'connected');
+          activeConnection = null;
+          callBtn.style.display = 'block';
+          hangupBtn.style.display = 'none';
+        });
+      } catch (err) {
+        setStatus('Setup failed: ' + err.message, 'error');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
